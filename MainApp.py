@@ -110,7 +110,7 @@ class MainApp(QtGui.QDialog):
 
         # set up the table view
         path = os.path.join(os.path.dirname(__file__), 'files','obce_cr.csv')
-        self.model, self.proxy = self.create_model(path)
+        self.model, self.proxy, self.geometry = self.create_model(path)
         self.ui.dataView.setModel(self.proxy)
         self.ui.dataView.setEditTriggers(QtGui.QAbstractItemView.NoEditTriggers)
         self.ui.dataView.setCornerButtonEnabled(False)
@@ -166,37 +166,48 @@ class MainApp(QtGui.QDialog):
         :return model, proxy
         """
         model = QtGui.QStandardItemModel(self)
-        firts_line = True
+        first_line = True
         header = []
         header.append('')
+
+        geometry = {}
 
         with open(file_path, 'r') as f:
             for line in f:
                 line = line.replace('\n','')
-                if firts_line:
-                    for word in line.split(','):
+                if first_line:
+                    for word in line.split(',')[:5]: # ignore last item (extent)
                         word = u'{}'.format(word.decode('utf-8'))
                         header.append(word)
-                    firts_line = False
+                    first_line = False
                 else:
                     items = []
                     item = QtGui.QStandardItem('')
                     item.setCheckable(True)
                     item.setSelectable(False)
                     items.append(item)
-                    for word in line.split(','):
+                    code = None
+                    for word in line.split(',')[:5]: # ignore last item (extent)
                         word = u'{}'.format(word.decode('utf-8'))
                         item = QtGui.QStandardItem(word)
                         item.setSelectable(False)
+                        if not items:
+                            code = word
                         items.append(item)
-                    model.appendRow(items)        
+                    model.appendRow(items)
+
+                    # process geometry
+                    wkt = line[line.find('POLYGON(('):-1]
+                    # TODO:
+                    # * otestovat, zda radek obsahuje 'POLYGON(('
+                    # * QgsGeometry -> geometry[code] = geom
 
         model.setHorizontalHeaderLabels(header)
         proxy = QtGui.QSortFilterProxyModel()
         proxy.setFilterKeyColumn(2)
         proxy.setSourceModel(model)
 
-        return model, proxy
+        return model, proxy, geometry
 
     def set_datasource(self, driverName):
         """Set GDAL driver and datasource.
