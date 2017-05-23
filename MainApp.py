@@ -110,7 +110,7 @@ class MainApp(QtGui.QDialog):
 
         # set up the table view
         path = os.path.join(os.path.dirname(__file__), 'files','obce_cr.csv')
-        self.model, self.proxy, self.geometry = self.create_model(path)
+        self.model, self.proxy, self.geometry, self.QPerIdx = self.create_model(path)
         self.ui.dataView.setModel(self.proxy)
         self.ui.dataView.setEditTriggers(QtGui.QAbstractItemView.NoEditTriggers)
         self.ui.dataView.setCornerButtonEnabled(False)
@@ -134,6 +134,7 @@ class MainApp(QtGui.QDialog):
         self.ui.advancedButton.clicked.connect(self.show_advanced)
         self.ui.importButton.clicked.connect(self.get_options)
         self.ui.buttonBox.rejected.connect(self.close)
+	self.ui.checkBox.clicked.connect(self.get_features)
 
     def errorOutputWritten(self, text):
         # self.iface.messageBar().pushMessage(u"Chyba: {}".format(text),
@@ -167,10 +168,12 @@ class MainApp(QtGui.QDialog):
         """
         model = QtGui.QStandardItemModel(self)
         first_line = True
+	line_n = 0
         header = []
         header.append('')
 
         geometry = {}
+	QPerIdx = {}
 
         with open(file_path, 'r') as f:
             for line in f:
@@ -182,32 +185,43 @@ class MainApp(QtGui.QDialog):
                     first_line = False
                 else:
                     items = []
+                    code = None
+		    name = []
                     item = QtGui.QStandardItem('')
                     item.setCheckable(True)
                     item.setSelectable(False)
                     items.append(item)
-                    code = None
                     for word in line.split(',')[:5]: # ignore last item (extent)
-                        word = u'{}'.format(word.decode('utf-8'))
+			word = u'{}'.format(word.decode('utf-8'))
                         item = QtGui.QStandardItem(word)
                         item.setSelectable(False)
-                        if not items:
-                            code = word
                         items.append(item)
+			if len(items) == 2:
+                            code = word
+			elif len(items) == 3:
+			    name = word
                     model.appendRow(items)
+		    #QModidx = model.index(line_n, 1)
+		    #QPeridx = QtCore.QPersistentModelIndex(QModidx)
+		    #if QPeridx.isValid() != True:
+			#print "Neplatny klic"
 
                     # process geometry
                     wkt = line[line.find('POLYGON(('):-1]
-                    # TODO:
-                    # * otestovat, zda radek obsahuje 'POLYGON(('
-                    # * QgsGeometry -> geometry[code] = geom
+		    if len(wkt) != 0:
+			geom = QgsGeometry.fromWkt(wkt)
+		    	geometry[code] = geom
+			#QPerIdx[code] = QPeridx
+			#QPerIdx[code] = line_n
+		    else:				
+			print #potreba udelat vypis pro obce ktery nemaji geometrii 
+		    #line_n += 1 
 
         model.setHorizontalHeaderLabels(header)
         proxy = QtGui.QSortFilterProxyModel()
         proxy.setFilterKeyColumn(2)
-        proxy.setSourceModel(model)
-
-        return model, proxy, geometry
+        proxy.setSourceModel(model)	
+        return model, proxy, geometry, QPerIdx
 
     def set_datasource(self, driverName):
         """Set GDAL driver and datasource.
@@ -294,6 +308,37 @@ class MainApp(QtGui.QDialog):
             self.ui.selectionComboBox.setEnabled(False)
         else:
             self.ui.selectionComboBox.setEnabled(True)
+   
+    def get_features(self):
+	""" Select features from model based on visibility in mapCanvas
+
+	"""
+	QperIdx = []
+	if self.ui.checkBox.isChecked():
+	   ext = self.iface.mapCanvas().extent()
+	   for (key, value) in self.geometry.items():
+	       case = value.intersects(ext)			
+	       if case:
+		  QperIdx.append(self.QPerIdx.get(key))
+		  print key
+	   #for feature in xrange(0, len(QperIdx)):
+	       #Qidx = self.proxy.index(QperIdx[feature], 0)
+	       #QMidx = Qidx.sibling(feature, 0)
+	       #QMidx = self.proxy.mapToSource(Qidx)
+	       #if QMidx.isValid() != True:
+	        #  print "Invalid index"
+	       #else:
+		#  print "Valid index"
+	       #item = self.model.itemFromIndex(QMidx)
+	       #item.setCheckState(QtCore.Qt.Checked)
+	else:
+	    #rows = self.proxy.rowCount()
+	    #for row in xrange(0,rows):
+		#proxyIdx = self.proxy.index(row,0)
+                #modelIdx = self.proxy.mapToSource(proxyIdx)
+                #item = self.model.itemFromIndex(modelIdx)
+                #item.setCheckState(QtCore.Qt.Unchecked)
+		print 0
 
     def set_searching(self, column):
         """Set filtering.
@@ -322,9 +367,9 @@ class MainApp(QtGui.QDialog):
             modelIdx = self.proxy.mapToSource(proxyIdx)
             item = self.model.itemFromIndex(modelIdx)
             if state == 0:
-                item.setCheckState(QtCore.Qt.Checked)
+               item.setCheckState(QtCore.Qt.Checked)
             elif state == 1:
-                item.setCheckState(QtCore.Qt.Unchecked)
+               item.setCheckState(QtCore.Qt.Unchecked)
 
     def show_advanced(self):
         """Show advanced options.
@@ -509,6 +554,7 @@ class MainApp(QtGui.QDialog):
             layers_added.append(layer_name)
 
         del datasource # close datasource
+	
 
 class ImportThread(QtCore.QThread):
     importEnd = QtCore.pyqtSignal()
