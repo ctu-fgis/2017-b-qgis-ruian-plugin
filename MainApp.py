@@ -59,6 +59,24 @@ class TextOutputSignal(QtCore.QObject):
     def write(self, text):
         self.textWritten.emit(str(text))
 
+class AccessProxyModel(QtGui.QSortFilterProxyModel):
+      
+      def __init__(self):
+          super(AccessProxyModel, self).__init__()
+
+      def find_keys(self, value):
+          values = []
+          rows = self.rowCount()
+          if len(value)!=0:          
+             for row in xrange(0, rows):
+                 Mdx = self.index(row,1)
+                 if Mdx.isValid():
+                    QVar = int(self.data(Mdx))        
+                    if QVar in value:
+                       values.append(self.index(row,0))
+             return values
+          else: return -1
+
 class MainApp(QtGui.QDialog):
 
     def __init__(self, iface, parent=None):
@@ -110,7 +128,7 @@ class MainApp(QtGui.QDialog):
 
         # set up the table view
         path = os.path.join(os.path.dirname(__file__), 'files','obce_cr.csv')
-        self.model, self.proxy, self.geometry, self.QPerIdx = self.create_model(path)
+        self.model, self.proxy, self.geometry, self.Mproxy = self.create_model(path)
         self.ui.dataView.setModel(self.proxy)
         self.ui.dataView.setEditTriggers(QtGui.QAbstractItemView.NoEditTriggers)
         self.ui.dataView.setCornerButtonEnabled(False)
@@ -201,18 +219,10 @@ class MainApp(QtGui.QDialog):
 			elif len(items) == 3:
 			    name = word
                     model.appendRow(items)
-		    #QModidx = model.index(line_n, 1)
-		    #QPeridx = QtCore.QPersistentModelIndex(QModidx)
-		    #if QPeridx.isValid() != True:
-			#print "Neplatny klic"
-
-                    # process geometry
                     wkt = line[line.find('POLYGON(('):-1]
 		    if len(wkt) != 0:
 			geom = QgsGeometry.fromWkt(wkt)
 		    	geometry[code] = geom
-			#QPerIdx[code] = QPeridx
-			#QPerIdx[code] = line_n
 		    else:				
 			print #potreba udelat vypis pro obce ktery nemaji geometrii 
 		    #line_n += 1 
@@ -221,7 +231,10 @@ class MainApp(QtGui.QDialog):
         proxy = QtGui.QSortFilterProxyModel()
         proxy.setFilterKeyColumn(2)
         proxy.setSourceModel(model)	
-        return model, proxy, geometry, QPerIdx
+	Mproxy = AccessProxyModel()
+	Mproxy.setFilterKeyColumn(1)
+	Mproxy.setSourceModel(model)
+        return model, proxy, geometry, Mproxy
 
     def set_datasource(self, driverName):
         """Set GDAL driver and datasource.
@@ -313,32 +326,20 @@ class MainApp(QtGui.QDialog):
 	""" Select features from model based on visibility in mapCanvas
 
 	"""
-	QperIdx = []
+	qper_idx = []
 	if self.ui.checkBox.isChecked():
 	   ext = self.iface.mapCanvas().extent()
 	   for (key, value) in self.geometry.items():
 	       case = value.intersects(ext)			
 	       if case:
-		  QperIdx.append(self.QPerIdx.get(key))
-		  print key
-	   #for feature in xrange(0, len(QperIdx)):
-	       #Qidx = self.proxy.index(QperIdx[feature], 0)
-	       #QMidx = Qidx.sibling(feature, 0)
-	       #QMidx = self.proxy.mapToSource(Qidx)
-	       #if QMidx.isValid() != True:
-	        #  print "Invalid index"
-	       #else:
-		#  print "Valid index"
-	       #item = self.model.itemFromIndex(QMidx)
-	       #item.setCheckState(QtCore.Qt.Checked)
+		 qper_idx.append(int(key))     
+           Mdx = self.Mproxy.find_keys(qper_idx)
+           for mdx in xrange(0, len(Mdx)):
+               modelIdx = self.Mproxy.mapToSource(Mdx[mdx])
+               item = self.model.itemFromIndex(modelIdx)
+               item.setCheckState(QtCore.Qt.Checked)         
 	else:
-	    #rows = self.proxy.rowCount()
-	    #for row in xrange(0,rows):
-		#proxyIdx = self.proxy.index(row,0)
-                #modelIdx = self.proxy.mapToSource(proxyIdx)
-                #item = self.model.itemFromIndex(modelIdx)
-                #item.setCheckState(QtCore.Qt.Unchecked)
-		print 0
+           self.set_checkstate(1)	
 
     def set_searching(self, column):
         """Set filtering.
