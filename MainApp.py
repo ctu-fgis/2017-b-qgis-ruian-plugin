@@ -232,7 +232,6 @@ class MainApp(QtGui.QDialog):
         proxy.setFilterKeyColumn(2)
         proxy.setSourceModel(model)	
 	Mproxy = AccessProxyModel()
-	Mproxy.setFilterKeyColumn(1)
 	Mproxy.setSourceModel(model)
         return model, proxy, geometry, Mproxy
 
